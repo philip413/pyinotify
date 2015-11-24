@@ -42,7 +42,7 @@ import setproctitle
 import fcntl
 
 
-NETCARD = 'eno1'
+NETCARD = 'enp0s3'
 KEY = "runningman"	# used for decryption
 src_ip = "192.168.0.17"	# Local IP address
 dst_ip = "192.168.0.9"	# change destination IP HERE

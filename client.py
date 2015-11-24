@@ -44,7 +44,7 @@ import time
 
 
 
-NETCARD = 'eno1'
+NETCARD = 'enp0s3'
 KEY = "runningman"
 src_ip = "192.168.0.16"	# by default
 dst_ip = "192.168.0.17"	# by default
